@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="pt"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MedicamentoController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">monitor-medicamentos</a> &gt; <a href="index.source.html" class="el_package">com.aep.monitor.controller</a> &gt; <span class="el_source">MedicamentoController.java</span></div><h1>MedicamentoController.java</h1><pre class="source lang-java linenums">package com.aep.monitor.controller;
+
+import com.aep.monitor.dto.AtualizarHorarioRequest;
+import com.aep.monitor.model.Medicamento;
+import com.aep.monitor.repository.MedicamentoRepository;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.net.URI;
+import java.util.List;
+import java.util.Optional;
+
+@RestController
+@RequestMapping(&quot;/medicamentos&quot;)
+public class MedicamentoController {
+
+    private final MedicamentoRepository repository;
+
+<span class="fc" id="L22">    public MedicamentoController(MedicamentoRepository repository) {</span>
+<span class="fc" id="L23">        this.repository = repository;</span>
+<span class="fc" id="L24">    }</span>
+
+    @Operation(summary = &quot;Cadastrar um novo medicamento&quot;)
+    @ApiResponse(responseCode = &quot;201&quot;, description = &quot;Medicamento cadastrado com sucesso&quot;)
+    @ApiResponse(responseCode = &quot;400&quot;, description = &quot;Dados inválidos&quot;)
+    @PostMapping
+    public ResponseEntity&lt;Medicamento&gt; cadastrar(@Valid @RequestBody Medicamento medicamento) {
+<span class="fc" id="L31">        medicamento.setId(null);</span>
+<span class="fc" id="L32">        Medicamento salvo = repository.save(medicamento);</span>
+<span class="fc" id="L33">        return ResponseEntity.created(URI.create(&quot;/medicamentos/&quot; + salvo.getId())).body(salvo);</span>
+    }
+
+    @Operation(summary = &quot;Listar todos os medicamentos cadastrados&quot;)
+    @ApiResponse(responseCode = &quot;200&quot;, description = &quot;Lista de medicamentos&quot;)
+    @GetMapping
+    public ResponseEntity&lt;List&lt;Medicamento&gt;&gt; listarTodos() {
+<span class="fc" id="L40">        return ResponseEntity.ok(repository.findAll());</span>
+    }
+
+    @Operation(summary = &quot;Buscar um medicamento por id&quot;)
+    @ApiResponse(responseCode = &quot;200&quot;, description = &quot;Medicamento encontrado&quot;)
+    @ApiResponse(responseCode = &quot;404&quot;, description = &quot;Medicamento não encontrado&quot;)
+    @GetMapping(&quot;/{id}&quot;)
+    public ResponseEntity&lt;Medicamento&gt; buscarPorId(@PathVariable String id) {
+<span class="fc" id="L48">        return repository.findById(id)</span>
+<span class="fc" id="L49">                .map(ResponseEntity::ok)</span>
+<span class="fc" id="L50">                .orElseGet(() -&gt; ResponseEntity.notFound().build());</span>
+    }
+
+    @Operation(summary = &quot;Atualizar o horário de um medicamento&quot;)
+    @ApiResponse(responseCode = &quot;200&quot;, description = &quot;Horário atualizado&quot;)
+    @ApiResponse(responseCode = &quot;404&quot;, description = &quot;Medicamento não encontrado&quot;)
+    @ApiResponse(responseCode = &quot;400&quot;, description = &quot;Dados inválidos&quot;)
+    @PatchMapping(&quot;/{id}/horario&quot;)
+    public ResponseEntity&lt;Medicamento&gt; atualizarHorario(@PathVariable String id,
+                                                          @Valid @RequestBody AtualizarHorarioRequest request) {
+<span class="fc" id="L60">        Optional&lt;Medicamento&gt; existente = repository.findById(id);</span>
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        if (existente.isEmpty()) {</span>
+<span class="fc" id="L62">            return ResponseEntity.notFound().build();</span>
+        }
+<span class="fc" id="L64">        Medicamento medicamento = existente.get();</span>
+<span class="fc" id="L65">        medicamento.setHorario(request.getHorario());</span>
+<span class="fc" id="L66">        return ResponseEntity.ok(repository.save(medicamento));</span>
+    }
+
+    @Operation(summary = &quot;Marcar um medicamento como tomado&quot;)
+    @ApiResponse(responseCode = &quot;200&quot;, description = &quot;Medicamento marcado como tomado&quot;)
+    @ApiResponse(responseCode = &quot;404&quot;, description = &quot;Medicamento não encontrado&quot;)
+    @PatchMapping(&quot;/{id}/tomado&quot;)
+    public ResponseEntity&lt;Medicamento&gt; marcarComoTomado(@PathVariable String id) {
+<span class="fc" id="L74">        Optional&lt;Medicamento&gt; existente = repository.findById(id);</span>
+<span class="fc bfc" id="L75" title="All 2 branches covered.">        if (existente.isEmpty()) {</span>
+<span class="fc" id="L76">            return ResponseEntity.notFound().build();</span>
+        }
+<span class="fc" id="L78">        Medicamento medicamento = existente.get();</span>
+<span class="fc" id="L79">        medicamento.marcarComoTomado();</span>
+<span class="fc" id="L80">        return ResponseEntity.ok(repository.save(medicamento));</span>
+    }
+
+    @Operation(summary = &quot;Remover um medicamento&quot;)
+    @ApiResponse(responseCode = &quot;204&quot;, description = &quot;Medicamento removido&quot;)
+    @ApiResponse(responseCode = &quot;404&quot;, description = &quot;Medicamento não encontrado&quot;)
+    @DeleteMapping(&quot;/{id}&quot;)
+    public ResponseEntity&lt;Void&gt; remover(@PathVariable String id) {
+<span class="fc bfc" id="L88" title="All 2 branches covered.">        if (!repository.existsById(id)) {</span>
+<span class="fc" id="L89">            return ResponseEntity.notFound().build();</span>
+        }
+<span class="fc" id="L91">        repository.deleteById(id);</span>
+<span class="fc" id="L92">        return ResponseEntity.noContent().build();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

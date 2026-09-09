@@ -72,6 +72,27 @@ class MedicamentoTest {
     }
 
     @Test
+    void deveAcusarViolacaoQuandoHorarioForaDoFormato() {
+        Medicamento m = new Medicamento("Maria", "Dipirona", "500mg", "25:99");
+        Set<ConstraintViolation<Medicamento>> violacoes = validator.validate(m);
+        assertFalse(violacoes.isEmpty());
+    }
+
+    @Test
+    void deveAcusarViolacaoQuandoHorarioComTextoLivre() {
+        Medicamento m = new Medicamento("Maria", "Dipirona", "500mg", "de manhã");
+        Set<ConstraintViolation<Medicamento>> violacoes = validator.validate(m);
+        assertFalse(violacoes.isEmpty());
+    }
+
+    @Test
+    void naoDeveAcusarViolacaoParaHorarioValidoNoLimiteDoDia() {
+        Medicamento m = new Medicamento("Maria", "Dipirona", "500mg", "23:59");
+        Set<ConstraintViolation<Medicamento>> violacoes = validator.validate(m);
+        assertTrue(violacoes.isEmpty());
+    }
+
+    @Test
     void deveMarcarEDesmarcarComoTomado() {
         Medicamento m = new Medicamento("Maria", "Dipirona", "500mg", "08:00");
 
@@ -102,5 +123,26 @@ class MedicamentoTest {
         String texto = m.toString();
         assertTrue(texto.contains("Maria"));
         assertTrue(texto.contains("Dipirona"));
+    }
+
+    @Test
+    void doisMedicamentosComMesmoIdDevemSerIguais() {
+        Medicamento a = new Medicamento("Maria", "Dipirona", "500mg", "08:00");
+        a.setId("1");
+        Medicamento b = new Medicamento("Outro Nome", "Outro Remédio", "1g", "20:00");
+        b.setId("1");
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void doisMedicamentosComIdDiferenteNaoDevemSerIguais() {
+        Medicamento a = new Medicamento("Maria", "Dipirona", "500mg", "08:00");
+        a.setId("1");
+        Medicamento b = new Medicamento("Maria", "Dipirona", "500mg", "08:00");
+        b.setId("2");
+
+        assertNotEquals(a, b);
     }
 }

@@ -1,8 +1,11 @@
 package com.aep.monitor.model;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.util.Objects;
 
 /**
  * Representa um medicamento cadastrado para um paciente.
@@ -11,6 +14,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
  */
 @Document(collection = "medicamentos")
 public class Medicamento {
+
+    private static final String FORMATO_HORARIO = "^([01]\\d|2[0-3]):[0-5]\\d$";
 
     @Id
     private String id;
@@ -25,6 +30,7 @@ public class Medicamento {
     private String dosagem;
 
     @NotBlank(message = "Horário é obrigatório")
+    @Pattern(regexp = FORMATO_HORARIO, message = "Horário deve estar no formato HH:mm (ex: 08:00)")
     private String horario;
 
     private boolean tomado;
@@ -90,6 +96,19 @@ public class Medicamento {
 
     public void desmarcarComoTomado() {
         this.tomado = false;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Medicamento)) return false;
+        Medicamento that = (Medicamento) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 
     @Override

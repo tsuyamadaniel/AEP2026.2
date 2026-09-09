@@ -23,7 +23,42 @@ profissionais de saúde domiciliar).
 - **springdoc-openapi** (Swagger UI gerado a partir dos controllers REST)
 - **Maven** (gerenciamento de dependências e build)
 - **JUnit 5** + **Mockito** (testes automatizados)
-- **JaCoCo** (relatório de cobertura de testes)
+- **JaCoCo** (relatório de cobertura de testes, com verificação automática de mínimo)
+- **GitHub Actions** (CI: roda os testes e valida a cobertura a cada push/PR)
+
+## Arquitetura
+O código é organizado em camadas, para manter responsabilidades separadas:
+
+```
+controller/  → mapeia rotas HTTP para chamadas de serviço (sem lógica de negócio)
+service/     → regras de negócio (buscar, validar existência, atualizar estado)
+repository/  → acesso ao MongoDB (Spring Data)
+model/       → entidade persistida na coleção "medicamentos"
+dto/         → dados de entrada para operações específicas (ex: atualizar horário)
+exception/   → exceções de domínio + tratamento centralizado de erros da API
+```
+
+Quando um medicamento não é encontrado, o service lança
+`MedicamentoNaoEncontradoException`, que é convertida automaticamente pelo
+`GlobalExceptionHandler` em uma resposta `404` estruturada, por exemplo:
+
+```json
+{
+  "timestamp": "2026-09-08T13:00:00Z",
+  "status": 404,
+  "erro": "Recurso não encontrado",
+  "mensagem": "Medicamento não encontrado com id: 999"
+}
+```
+
+Erros de validação de campos (`@Valid`) também são centralizados e retornam
+um corpo simples de `campo → mensagem`, por exemplo:
+
+```json
+{
+  "horario": "Horário deve estar no formato HH:mm (ex: 08:00)"
+}
+```
 
 ## Funcionalidades da 1ª entrega
 A API expõe os seguintes endpoints REST em `/medicamentos`, testáveis pelo Swagger UI:
@@ -32,10 +67,14 @@ A API expõe os seguintes endpoints REST em `/medicamentos`, testáveis pelo Swa
 |---|---|---|
 | POST | `/medicamentos` | Cadastrar medicamento |
 | GET | `/medicamentos` | Listar todos |
+| GET | `/medicamentos/paciente/{nomePaciente}` | Listar medicamentos de um paciente |
 | GET | `/medicamentos/{id}` | Buscar por id |
 | PATCH | `/medicamentos/{id}/horario` | Atualizar horário |
 | PATCH | `/medicamentos/{id}/tomado` | Marcar como tomado |
 | DELETE | `/medicamentos/{id}` | Remover |
+
+O campo `horario` é validado no formato `HH:mm` (ex: `08:00`, `23:59`); valores
+fora desse padrão são rejeitados com `400` antes de chegar ao banco.
 
 ## Como executar
 
@@ -61,14 +100,23 @@ Para usar outra instância (ex: MongoDB Atlas), defina a variável de ambiente
 `MONGO_URI` antes de subir a aplicação.
 
 ## Como rodar os testes e gerar a cobertura
+Para rodar os testes e gerar o relatório de cobertura, sem travar o build:
 ```bash
 mvn test
 ```
-O relatório de cobertura (JaCoCo) é gerado em:
+O relatório é gerado em:
 ```
 target/site/jacoco/index.html
 ```
-Abra esse arquivo no navegador para visualizar o percentual de cobertura.
+
+Para validar automaticamente a cobertura mínima exigida (**70%**), rode:
+```bash
+mvn verify
+```
+Esse comando **falha o build** se a cobertura ficar abaixo de 70% — é a
+evidência reproduzível de cobertura pedida no enunciado da AEP. O mesmo
+comando roda automaticamente a cada push/PR via GitHub Actions
+(`.github/workflows/ci.yml`).
 
 ## Estrutura do banco (1º semestre)
 Coleção única `medicamentos`, com documentos simples e homogêneos:
@@ -88,7 +136,8 @@ script [`mongo-init/init.js`](mongo-init/init.js), executado automaticamente
 pelo MongoDB na primeira vez que o container sobe (via
 `docker-entrypoint-initdb.d`, configurado no `docker-compose.yml`). Isso
 garante que só documentos com os campos obrigatórios corretos sejam aceitos
-no banco.
+no banco. Há também um índice em `nomePaciente`, usado pelo endpoint de
+listagem por paciente.
 
 Para conferir a coleção e a validação direto no Mongo:
 ```bash
@@ -107,16 +156,23 @@ docker exec -it mongo-monitor mongosh monitor_medicamentos --eval "db.getCollect
 ## Estrutura do projeto
 ```
 monitor-medicamentos/
+├── .github/workflows/ci.yml
 ├── src/main/java/com/aep/monitor/
 │   ├── MonitorMedicamentosApplication.java
 │   ├── model/Medicamento.java
 │   ├── repository/MedicamentoRepository.java
+│   ├── service/MedicamentoService.java
 │   ├── controller/MedicamentoController.java
-│   └── dto/AtualizarHorarioRequest.java
+│   ├── dto/AtualizarHorarioRequest.java
+│   └── exception/
+│       ├── MedicamentoNaoEncontradoException.java
+│       └── GlobalExceptionHandler.java
 ├── src/main/resources/application.properties
 ├── src/test/java/com/aep/monitor/
 │   ├── MedicamentoTest.java
-│   └── controller/MedicamentoControllerTest.java
+│   ├── controller/MedicamentoControllerTest.java
+│   └── service/MedicamentoServiceTest.java
+├── mongo-init/init.js
 ├── docker-compose.yml
 ├── pom.xml
 └── README.md

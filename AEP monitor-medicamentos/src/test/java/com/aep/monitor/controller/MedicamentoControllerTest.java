@@ -1,7 +1,8 @@
 package com.aep.monitor.controller;
 
+import com.aep.monitor.exception.MedicamentoNaoEncontradoException;
 import com.aep.monitor.model.Medicamento;
-import com.aep.monitor.repository.MedicamentoRepository;
+import com.aep.monitor.service.MedicamentoService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,7 +11,6 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,7 +28,7 @@ class MedicamentoControllerTest {
     private ObjectMapper objectMapper;
 
     @MockBean
-    private MedicamentoRepository repository;
+    private MedicamentoService service;
 
     private Medicamento medicamentoValido() {
         Medicamento m = new Medicamento("Maria", "Dipirona", "500mg", "08:00");
@@ -40,7 +40,7 @@ class MedicamentoControllerTest {
     void deveCadastrarMedicamentoComDadosValidos() throws Exception {
         Medicamento medicamento = new Medicamento("Maria", "Dipirona", "500mg", "08:00");
         Medicamento salvo = medicamentoValido();
-        when(repository.save(any(Medicamento.class))).thenReturn(salvo);
+        when(service.cadastrar(any(Medicamento.class))).thenReturn(salvo);
 
         mockMvc.perform(post("/medicamentos")
                         .contentType("application/json")
@@ -59,12 +59,23 @@ class MedicamentoControllerTest {
                         .content(objectMapper.writeValueAsString(invalido)))
                 .andExpect(status().isBadRequest());
 
-        verify(repository, never()).save(any());
+        verify(service, never()).cadastrar(any());
+    }
+
+    @Test
+    void deveRetornarBadRequestQuandoHorarioForaDoFormato() throws Exception {
+        Medicamento invalido = new Medicamento("Maria", "Dipirona", "500mg", "25:99");
+
+        mockMvc.perform(post("/medicamentos")
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(invalido)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.horario").exists());
     }
 
     @Test
     void deveListarTodosOsMedicamentos() throws Exception {
-        when(repository.findAll()).thenReturn(List.of(medicamentoValido()));
+        when(service.listarTodos()).thenReturn(List.of(medicamentoValido()));
 
         mockMvc.perform(get("/medicamentos"))
                 .andExpect(status().isOk())
@@ -72,8 +83,27 @@ class MedicamentoControllerTest {
     }
 
     @Test
+    void deveListarMedicamentosDeUmPaciente() throws Exception {
+        when(service.listarPorPaciente("Maria")).thenReturn(List.of(medicamentoValido()));
+
+        mockMvc.perform(get("/medicamentos/paciente/Maria"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nomePaciente").value("Maria"));
+    }
+
+    @Test
+    void deveRetornarListaVaziaQuandoPacienteNaoTemMedicamentos() throws Exception {
+        when(service.listarPorPaciente("Ninguem")).thenReturn(List.of());
+
+        mockMvc.perform(get("/medicamentos/paciente/Ninguem"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
     void deveBuscarMedicamentoPorId() throws Exception {
-        when(repository.findById("1")).thenReturn(Optional.of(medicamentoValido()));
+        when(service.buscarPorId("1")).thenReturn(medicamentoValido());
 
         mockMvc.perform(get("/medicamentos/1"))
                 .andExpect(status().isOk())
@@ -82,17 +112,19 @@ class MedicamentoControllerTest {
 
     @Test
     void deveRetornarNotFoundQuandoBuscarIdInexistente() throws Exception {
-        when(repository.findById("999")).thenReturn(Optional.empty());
+        when(service.buscarPorId("999")).thenThrow(new MedicamentoNaoEncontradoException("999"));
 
         mockMvc.perform(get("/medicamentos/999"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensagem").exists())
+                .andExpect(jsonPath("$.status").value(404));
     }
 
     @Test
     void deveAtualizarHorarioDeMedicamentoExistente() throws Exception {
-        Medicamento existente = medicamentoValido();
-        when(repository.findById("1")).thenReturn(Optional.of(existente));
-        when(repository.save(any(Medicamento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Medicamento atualizado = medicamentoValido();
+        atualizado.setHorario("12:00");
+        when(service.atualizarHorario(eq("1"), eq("12:00"))).thenReturn(atualizado);
 
         mockMvc.perform(patch("/medicamentos/1/horario")
                         .contentType("application/json")
@@ -110,8 +142,16 @@ class MedicamentoControllerTest {
     }
 
     @Test
+    void deveRetornarBadRequestAoAtualizarHorarioForaDoFormato() throws Exception {
+        mockMvc.perform(patch("/medicamentos/1/horario")
+                        .contentType("application/json")
+                        .content("{\"horario\":\"vinte horas\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void deveRetornarNotFoundAoAtualizarHorarioDeIdInexistente() throws Exception {
-        when(repository.findById("999")).thenReturn(Optional.empty());
+        when(service.atualizarHorario(eq("999"), any())).thenThrow(new MedicamentoNaoEncontradoException("999"));
 
         mockMvc.perform(patch("/medicamentos/999/horario")
                         .contentType("application/json")
@@ -121,9 +161,9 @@ class MedicamentoControllerTest {
 
     @Test
     void deveMarcarMedicamentoComoTomado() throws Exception {
-        Medicamento existente = medicamentoValido();
-        when(repository.findById("1")).thenReturn(Optional.of(existente));
-        when(repository.save(any(Medicamento.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Medicamento tomado = medicamentoValido();
+        tomado.marcarComoTomado();
+        when(service.marcarComoTomado("1")).thenReturn(tomado);
 
         mockMvc.perform(patch("/medicamentos/1/tomado"))
                 .andExpect(status().isOk())
@@ -132,7 +172,7 @@ class MedicamentoControllerTest {
 
     @Test
     void deveRetornarNotFoundAoMarcarComoTomadoIdInexistente() throws Exception {
-        when(repository.findById("999")).thenReturn(Optional.empty());
+        when(service.marcarComoTomado("999")).thenThrow(new MedicamentoNaoEncontradoException("999"));
 
         mockMvc.perform(patch("/medicamentos/999/tomado"))
                 .andExpect(status().isNotFound());
@@ -140,21 +180,19 @@ class MedicamentoControllerTest {
 
     @Test
     void deveRemoverMedicamentoExistente() throws Exception {
-        when(repository.existsById("1")).thenReturn(true);
+        doNothing().when(service).remover("1");
 
         mockMvc.perform(delete("/medicamentos/1"))
                 .andExpect(status().isNoContent());
 
-        verify(repository).deleteById("1");
+        verify(service).remover("1");
     }
 
     @Test
     void deveRetornarNotFoundAoRemoverIdInexistente() throws Exception {
-        when(repository.existsById("999")).thenReturn(false);
+        doThrow(new MedicamentoNaoEncontradoException("999")).when(service).remover("999");
 
         mockMvc.perform(delete("/medicamentos/999"))
                 .andExpect(status().isNotFound());
-
-        verify(repository, never()).deleteById(eq("999"));
     }
 }

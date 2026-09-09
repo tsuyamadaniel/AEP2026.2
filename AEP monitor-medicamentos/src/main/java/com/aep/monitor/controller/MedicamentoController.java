@@ -2,7 +2,7 @@ package com.aep.monitor.controller;
 
 import com.aep.monitor.dto.AtualizarHorarioRequest;
 import com.aep.monitor.model.Medicamento;
-import com.aep.monitor.repository.MedicamentoRepository;
+import com.aep.monitor.service.MedicamentoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
@@ -11,16 +11,15 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/medicamentos")
 public class MedicamentoController {
 
-    private final MedicamentoRepository repository;
+    private final MedicamentoService service;
 
-    public MedicamentoController(MedicamentoRepository repository) {
-        this.repository = repository;
+    public MedicamentoController(MedicamentoService service) {
+        this.service = service;
     }
 
     @Operation(summary = "Cadastrar um novo medicamento")
@@ -28,8 +27,7 @@ public class MedicamentoController {
     @ApiResponse(responseCode = "400", description = "Dados inválidos")
     @PostMapping
     public ResponseEntity<Medicamento> cadastrar(@Valid @RequestBody Medicamento medicamento) {
-        medicamento.setId(null);
-        Medicamento salvo = repository.save(medicamento);
+        Medicamento salvo = service.cadastrar(medicamento);
         return ResponseEntity.created(URI.create("/medicamentos/" + salvo.getId())).body(salvo);
     }
 
@@ -37,7 +35,14 @@ public class MedicamentoController {
     @ApiResponse(responseCode = "200", description = "Lista de medicamentos")
     @GetMapping
     public ResponseEntity<List<Medicamento>> listarTodos() {
-        return ResponseEntity.ok(repository.findAll());
+        return ResponseEntity.ok(service.listarTodos());
+    }
+
+    @Operation(summary = "Listar os medicamentos de um paciente pelo nome")
+    @ApiResponse(responseCode = "200", description = "Lista de medicamentos do paciente")
+    @GetMapping("/paciente/{nomePaciente}")
+    public ResponseEntity<List<Medicamento>> listarPorPaciente(@PathVariable String nomePaciente) {
+        return ResponseEntity.ok(service.listarPorPaciente(nomePaciente));
     }
 
     @Operation(summary = "Buscar um medicamento por id")
@@ -45,9 +50,7 @@ public class MedicamentoController {
     @ApiResponse(responseCode = "404", description = "Medicamento não encontrado")
     @GetMapping("/{id}")
     public ResponseEntity<Medicamento> buscarPorId(@PathVariable String id) {
-        return repository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return ResponseEntity.ok(service.buscarPorId(id));
     }
 
     @Operation(summary = "Atualizar o horário de um medicamento")
@@ -57,13 +60,7 @@ public class MedicamentoController {
     @PatchMapping("/{id}/horario")
     public ResponseEntity<Medicamento> atualizarHorario(@PathVariable String id,
                                                           @Valid @RequestBody AtualizarHorarioRequest request) {
-        Optional<Medicamento> existente = repository.findById(id);
-        if (existente.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        Medicamento medicamento = existente.get();
-        medicamento.setHorario(request.getHorario());
-        return ResponseEntity.ok(repository.save(medicamento));
+        return ResponseEntity.ok(service.atualizarHorario(id, request.getHorario()));
     }
 
     @Operation(summary = "Marcar um medicamento como tomado")
@@ -71,13 +68,7 @@ public class MedicamentoController {
     @ApiResponse(responseCode = "404", description = "Medicamento não encontrado")
     @PatchMapping("/{id}/tomado")
     public ResponseEntity<Medicamento> marcarComoTomado(@PathVariable String id) {
-        Optional<Medicamento> existente = repository.findById(id);
-        if (existente.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        Medicamento medicamento = existente.get();
-        medicamento.marcarComoTomado();
-        return ResponseEntity.ok(repository.save(medicamento));
+        return ResponseEntity.ok(service.marcarComoTomado(id));
     }
 
     @Operation(summary = "Remover um medicamento")
@@ -85,10 +76,7 @@ public class MedicamentoController {
     @ApiResponse(responseCode = "404", description = "Medicamento não encontrado")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> remover(@PathVariable String id) {
-        if (!repository.existsById(id)) {
-            return ResponseEntity.notFound().build();
-        }
-        repository.deleteById(id);
+        service.remover(id);
         return ResponseEntity.noContent().build();
     }
 }
